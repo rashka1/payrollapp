@@ -30,7 +30,9 @@
   .modal-box h2{font-size:17px;font-weight:700;color:#0F2044;margin-bottom:1rem}
   .field{margin-bottom:10px}
   .field label{font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:3px}
-  .field input,.field select{width:100%;padding:8px 11px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
+  .field input,.field select{width:100%;padding:8px 11px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px;outline:none;transition:border-color .15s}
+  .field input:focus{border-color:#1A56A0}
+  .field input.err-input{border-color:#DC2626}
   .modal-btns{display:flex;gap:8px;margin-top:1rem}
   .msg{padding:8px 12px;border-radius:7px;font-size:13px;margin-bottom:8px;display:none}
   .msg-ok{background:#F0FDF4;border:1px solid #86EFAC;color:#16A34A}
@@ -73,13 +75,32 @@
   <div class="modal-box">
     <h2 id="modalTitle">Add Employee</h2>
     <input type="hidden" id="empId" />
-    <div class="field"><label>Full Name</label><input id="fName" /></div>
-    <div class="field"><label>Email</label><input id="fEmail" /></div>
-    <div class="field"><label>Position</label><input id="fPosition" /></div>
-    <div class="field"><label>Base Salary</label><input id="fSalary" type="number" /></div>
-    <div class="field"><label>Bonus</label><input id="fBonus" type="number" value="0" /></div>
-    <div class="field"><label>Status</label>
-      <select id="fStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+    <div class="field">
+      <label>Full Name *</label>
+      <input id="fName" placeholder="Enter full name" />
+    </div>
+    <div class="field">
+      <label>Email *</label>
+      <input id="fEmail" type="email" placeholder="Enter email address" />
+    </div>
+    <div class="field">
+      <label>Position *</label>
+      <input id="fPosition" placeholder="Enter job position" />
+    </div>
+    <div class="field">
+      <label>Base Salary *</label>
+      <input id="fSalary" type="number" min="0" step="0.01" placeholder="0.00" />
+    </div>
+    <div class="field">
+      <label>Bonus</label>
+      <input id="fBonus" type="number" min="0" step="0.01" value="0" placeholder="0.00" />
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <select id="fStatus">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
     </div>
     <div class="modal-btns">
       <button class="btn btn-blue" onclick="saveEmployee()" style="flex:1">Save</button>
@@ -94,11 +115,11 @@
 let empTable;
 window.onload = loadEmployees;
 
-async function loadEmployees() {
+async function loadEmployees(){
   const status = document.getElementById('statusFilter').value;
-  const res = await fetch(`/api/employees?status=${status}`);
-  const emps = await res.json();
-  if (empTable) { empTable.destroy(); }
+  const res    = await fetch(`/api/employees?status=${status}`);
+  const emps   = await res.json();
+  if(empTable) empTable.destroy();
   document.getElementById('empBody').innerHTML = emps.map(e => `
     <tr>
       <td><b>${e.name}</b></td>
@@ -116,18 +137,36 @@ async function loadEmployees() {
   empTable = $('#empTable').DataTable({ pageLength:10, columnDefs:[{orderable:false,targets:6}] });
 }
 
-function openModal(data=null) {
+function clearInputErrors(){
+  ['fName','fEmail','fPosition','fSalary','fBonus'].forEach(id => {
+    document.getElementById(id).classList.remove('err-input');
+  });
+}
+
+function markError(fieldId, msg){
+  document.getElementById(fieldId).classList.add('err-input');
+  document.getElementById(fieldId).focus();
+  showMsg(msg, 'err');
+}
+
+function openModal(data=null){
   document.getElementById('modal').classList.add('show');
   document.getElementById('modalTitle').textContent = data ? 'Edit Employee' : 'Add Employee';
-  document.getElementById('empId').value = data?.id || '';
-  document.getElementById('fName').value = data?.name || '';
-  document.getElementById('fEmail').value = data?.email || '';
+  document.getElementById('empId').value     = data?.id       || '';
+  document.getElementById('fName').value     = data?.name     || '';
+  document.getElementById('fEmail').value    = data?.email    || '';
   document.getElementById('fPosition').value = data?.position || '';
-  document.getElementById('fSalary').value = data?.base_salary || '';
-  document.getElementById('fBonus').value = data?.bonus ?? 0;
-  document.getElementById('fStatus').value = data?.status || 'active';
+  document.getElementById('fSalary').value   = data?.base_salary !== undefined ? data.base_salary : '';
+  document.getElementById('fBonus').value    = data?.bonus    !== undefined ? data.bonus : 0;
+  document.getElementById('fStatus').value   = data?.status   || 'active';
+  clearInputErrors();
+  document.getElementById('msg').style.display = 'none';
 }
-function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+
+function closeModal(){
+  document.getElementById('modal').classList.remove('show');
+  clearInputErrors();
+}
 
 async function editEmployee(id){
   const res = await fetch(`/api/employees/${id}`);
@@ -135,35 +174,92 @@ async function editEmployee(id){
 }
 
 async function saveEmployee(){
-  const id = document.getElementById('empId').value;
+  clearInputErrors();
+
+  const id       = document.getElementById('empId').value;
+  const name     = document.getElementById('fName').value.trim();
+  const email    = document.getElementById('fEmail').value.trim();
+  const position = document.getElementById('fPosition').value.trim();
+  const salary   = document.getElementById('fSalary').value.trim();
+  const bonus    = document.getElementById('fBonus').value.trim();
+  const status   = document.getElementById('fStatus').value;
+
+  // Validate one by one — stop at first error
+  if(!name){
+    markError('fName', 'Name is required'); return;
+  }
+  if(name.length > 100){
+    markError('fName', 'Name is too long (max 100 characters)'); return;
+  }
+  if(!email){
+    markError('fEmail', 'Email is required'); return;
+  }
+  if(!email.includes('@') || !email.includes('.')){
+    markError('fEmail', 'Enter a valid email address'); return;
+  }
+  if(email.length > 150){
+    markError('fEmail', 'Email is too long'); return;
+  }
+  if(!position){
+    markError('fPosition', 'Position is required'); return;
+  }
+  if(position.length > 100){
+    markError('fPosition', 'Position is too long (max 100 characters)'); return;
+  }
+  if(salary === ''){
+    markError('fSalary', 'Base salary is required'); return;
+  }
+  if(isNaN(parseFloat(salary))){
+    markError('fSalary', 'Base salary must be a number'); return;
+  }
+  if(parseFloat(salary) < 0){
+    markError('fSalary', 'Base salary cannot be negative'); return;
+  }
+  if(bonus !== '' && isNaN(parseFloat(bonus))){
+    markError('fBonus', 'Bonus must be a number'); return;
+  }
+  if(bonus !== '' && parseFloat(bonus) < 0){
+    markError('fBonus', 'Bonus cannot be negative'); return;
+  }
+
   const body = {
-    name:        document.getElementById('fName').value,
-    email:       document.getElementById('fEmail').value,
-    position:    document.getElementById('fPosition').value,
-    base_salary: document.getElementById('fSalary').value,
-    bonus:       document.getElementById('fBonus').value,
-    status:      document.getElementById('fStatus').value
+    name:        name,
+    email:       email,
+    position:    position,
+    base_salary: parseFloat(salary),
+    bonus:       bonus === '' ? 0 : parseFloat(bonus),
+    status:      status
   };
+
   const res = await fetch(id ? `/api/employees/${id}` : '/api/employees', {
-    method: id ? 'PUT' : 'POST',
+    method:  id ? 'PUT' : 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(body)
+    body:    JSON.stringify(body)
   });
-  if(res.ok){ closeModal(); showMsg('Saved successfully','ok'); loadEmployees(); }
-  else { const d=await res.json(); showMsg(d.error||'Error saving','err'); }
+
+  if(res.ok){
+    closeModal();
+    showMsg('Employee saved successfully', 'ok');
+    loadEmployees();
+  } else {
+    const d = await res.json();
+    showMsg(d.error || 'Error saving employee', 'err');
+  }
 }
 
 async function deleteEmployee(id){
-  if(!confirm('Delete employee and all their payroll records?')) return;
+  if(!confirm('Delete this employee and all their payroll records?')) return;
   const res = await fetch(`/api/employees/${id}`, {method:'DELETE'});
-  if(res.ok){ showMsg('Employee deleted','ok'); loadEmployees(); }
-  else { const d=await res.json(); showMsg(d.error||'Error','err'); }
+  if(res.ok){ showMsg('Employee deleted', 'ok'); loadEmployees(); }
+  else { const d = await res.json(); showMsg(d.error||'Error deleting','err'); }
 }
 
-function showMsg(msg,type){
-  const el=document.getElementById('msg');
-  el.textContent=msg; el.className=`msg msg-${type}`; el.style.display='block';
-  setTimeout(()=>el.style.display='none',2500);
+function showMsg(msg, type){
+  const el = document.getElementById('msg');
+  el.textContent   = msg;
+  el.className     = `msg msg-${type}`;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
 }
 </script>
 </body>

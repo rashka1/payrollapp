@@ -16,29 +16,37 @@ def payroll_page():
 def get_payroll():
     search = request.args.get('search', '')
     status = request.args.get('status', '')
-    month  = request.args.get('month', '')
-    year   = request.args.get('year', '')
-
-    query = Payroll.query.join(Employee)
+    query  = Payroll.query.join(Employee)
     if search:
         query = query.filter(Employee.name.ilike(f'%{search}%'))
     if status:
+        if status not in ['pending', 'approved']:
+            return jsonify({'error': 'Status must be pending or approved'}), 400
         query = query.filter(Payroll.status == status)
-    if month:
-        query = query.filter(Payroll.month == int(month))
-    if year:
-        query = query.filter(Payroll.year == int(year))
-
     records = query.order_by(Payroll.year.desc(), Payroll.month.desc()).all()
     return jsonify([p.to_dict() for p in records])
 
 @payroll_bp.route('/api/payroll', methods=['POST'])
 @login_required
 def generate_payroll():
-    data        = request.get_json()
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
     employee_id = data.get('employee_id')
-    month       = int(data.get('month'))
-    year        = int(data.get('year'))
+    if not employee_id:
+        return jsonify({'error': 'Employee is required'}), 400
+
+    try:
+        month = int(data.get('month'))
+        year  = int(data.get('year'))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Month and year must be numbers'}), 400
+
+    if month < 1 or month > 12:
+        return jsonify({'error': 'Month must be between 1 and 12'}), 400
+    if year < 2000 or year > 2100:
+        return jsonify({'error': 'Year must be between 2000 and 2100'}), 400
 
     emp = Employee.query.get_or_404(employee_id)
 
@@ -65,18 +73,28 @@ def generate_payroll():
 @payroll_bp.route('/api/payroll/bulk', methods=['POST'])
 @login_required
 def bulk_generate_payroll():
-    data  = request.get_json()
-    month = int(data.get('month'))
-    year  = int(data.get('year'))
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
 
-    active_employees = Employee.query.filter_by(status='active').all()
-    if not active_employees:
+    try:
+        month = int(data.get('month'))
+        year  = int(data.get('year'))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Month and year must be numbers'}), 400
+
+    if month < 1 or month > 12:
+        return jsonify({'error': 'Month must be between 1 and 12'}), 400
+    if year < 2000 or year > 2100:
+        return jsonify({'error': 'Year must be between 2000 and 2100'}), 400
+
+    active = Employee.query.filter_by(status='active').all()
+    if not active:
         return jsonify({'error': 'No active employees found'}), 400
 
     generated = []
     skipped   = []
-
-    for emp in active_employees:
+    for emp in active:
         try:
             payroll = Payroll(
                 employee_id  = emp.id,
@@ -106,10 +124,25 @@ def update_payroll(id):
     payroll = Payroll.query.get_or_404(id)
     if payroll.status == 'approved':
         return jsonify({'error': 'Cannot edit an approved payroll record'}), 403
+
     data = request.get_json()
-    payroll.base_salary  = float(data.get('base_salary', payroll.base_salary))
-    payroll.bonus        = float(data.get('bonus',       payroll.bonus))
-    payroll.total_salary = payroll.base_salary + payroll.bonus
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    try:
+        base_salary = float(data.get('base_salary', payroll.base_salary))
+        bonus       = float(data.get('bonus',       payroll.bonus))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Salary and bonus must be numbers'}), 400
+
+    if base_salary < 0:
+        return jsonify({'error': 'Base salary cannot be negative'}), 400
+    if bonus < 0:
+        return jsonify({'error': 'Bonus cannot be negative'}), 400
+
+    payroll.base_salary  = base_salary
+    payroll.bonus        = bonus
+    payroll.total_salary = base_salary + bonus
     db.session.commit()
     return jsonify(payroll.to_dict())
 

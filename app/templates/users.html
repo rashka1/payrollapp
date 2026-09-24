@@ -29,7 +29,10 @@
   .modal-box h2{font-size:17px;font-weight:700;color:#0F2044;margin-bottom:1rem}
   .field{margin-bottom:10px}
   .field label{font-size:12px;font-weight:600;display:block;margin-bottom:3px}
-  .field input,.field select{width:100%;padding:8px 11px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
+  .field input,.field select{width:100%;padding:8px 11px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px;outline:none;transition:border-color .15s}
+  .field input:focus{border-color:#1A56A0}
+  .field input.err-input{border-color:#DC2626}
+  .hint{font-size:11px;color:#94A3B8;margin-top:3px}
   .modal-btns{display:flex;gap:8px;margin-top:1rem}
   .msg{padding:8px 12px;border-radius:7px;font-size:13px;margin-bottom:8px;display:none}
   .msg-ok{background:#F0FDF4;border:1px solid #86EFAC;color:#16A34A}
@@ -66,11 +69,25 @@
   <div class="modal-box">
     <h2 id="modalTitle">Add User</h2>
     <input type="hidden" id="userId" />
-    <div class="field"><label>Username</label><input id="fUsername" /></div>
-    <div class="field"><label>Email</label><input id="fEmail" /></div>
-    <div class="field" id="pwdField"><label>Password</label><input id="fPassword" type="password" placeholder="Leave blank to keep current" /></div>
-    <div class="field"><label>Role</label>
-      <select id="fRole"><option value="user">User</option><option value="admin">Admin</option></select>
+    <div class="field">
+      <label>Username *</label>
+      <input id="fUsername" placeholder="Enter username" />
+    </div>
+    <div class="field">
+      <label>Email *</label>
+      <input id="fEmail" type="email" placeholder="Enter email address" />
+    </div>
+    <div class="field">
+      <label>Password *</label>
+      <input id="fPassword" type="password" placeholder="Enter password" />
+      <div class="hint" id="pwdHint">Minimum 4 characters</div>
+    </div>
+    <div class="field">
+      <label>Role</label>
+      <select id="fRole">
+        <option value="user">User</option>
+        <option value="admin">Admin</option>
+      </select>
     </div>
     <div class="modal-btns">
       <button class="btn btn-blue" onclick="saveUser()" style="flex:1">Save</button>
@@ -88,7 +105,7 @@ window.onload = loadUsers;
 
 async function loadUsers(){
   const res = await fetch('/users');
-  usersData = await res.json();
+  usersData  = await res.json();
   if(userTable) userTable.destroy();
   document.getElementById('userBody').innerHTML = usersData.map(u => `
     <tr>
@@ -104,16 +121,37 @@ async function loadUsers(){
   userTable = $('#userTable').DataTable({ pageLength:10, columnDefs:[{orderable:false,targets:3}] });
 }
 
+function clearInputErrors(){
+  ['fUsername','fEmail','fPassword'].forEach(id => {
+    document.getElementById(id).classList.remove('err-input');
+  });
+}
+
+function markError(fieldId, msg){
+  document.getElementById(fieldId).classList.add('err-input');
+  document.getElementById(fieldId).focus();
+  showMsg(msg, 'err');
+}
+
 function openModal(data=null){
   document.getElementById('modal').classList.add('show');
   document.getElementById('modalTitle').textContent = data ? 'Edit User' : 'Add User';
-  document.getElementById('userId').value = data?.id || '';
+  document.getElementById('userId').value    = data?.id       || '';
   document.getElementById('fUsername').value = data?.username || '';
-  document.getElementById('fEmail').value = data?.email || '';
+  document.getElementById('fEmail').value    = data?.email    || '';
   document.getElementById('fPassword').value = '';
-  document.getElementById('fRole').value = data?.role || 'user';
+  document.getElementById('fRole').value     = data?.role     || 'user';
+  document.getElementById('pwdHint').textContent = data
+    ? 'Leave blank to keep current password'
+    : 'Minimum 4 characters';
+  clearInputErrors();
+  document.getElementById('msg').style.display = 'none';
 }
-function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+
+function closeModal(){
+  document.getElementById('modal').classList.remove('show');
+  clearInputErrors();
+}
 
 function editUser(id){
   const user = usersData.find(u => u.id === id);
@@ -121,34 +159,65 @@ function editUser(id){
 }
 
 async function saveUser(){
-  const id = document.getElementById('userId').value;
-  const body = {
-    username: document.getElementById('fUsername').value,
-    email: document.getElementById('fEmail').value,
-    role: document.getElementById('fRole').value
-  };
-  const pwd = document.getElementById('fPassword').value;
-  if(pwd) body.password = pwd;
-  if(!id && !pwd){ showMsg('Password is required for new users','err'); return; }
+  clearInputErrors();
 
-  const url = id ? `/users/${id}` : '/users';
-  const method = id ? 'PUT' : 'POST';
-  const res = await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(res.ok){ closeModal(); showMsg('Saved','ok'); loadUsers(); }
-  else{ const d=await res.json(); showMsg(d.error||'Error','err'); }
+  const id       = document.getElementById('userId').value;
+  const username = document.getElementById('fUsername').value.trim();
+  const email    = document.getElementById('fEmail').value.trim();
+  const password = document.getElementById('fPassword').value;
+  const role     = document.getElementById('fRole').value;
+
+  if(!username){
+    markError('fUsername', 'Username is required'); return;
+  }
+  if(username.length > 80){
+    markError('fUsername', 'Username is too long (max 80 characters)'); return;
+  }
+  if(!email){
+    markError('fEmail', 'Email is required'); return;
+  }
+  if(!email.includes('@') || !email.includes('.')){
+    markError('fEmail', 'Enter a valid email address'); return;
+  }
+  if(!id && !password){
+    markError('fPassword', 'Password is required for new users'); return;
+  }
+  if(password && password.length < 4){
+    markError('fPassword', 'Password must be at least 4 characters'); return;
+  }
+
+  const body = { username, email, role };
+  if(password) body.password = password;
+
+  const res = await fetch(id ? `/users/${id}` : '/users', {
+    method:  id ? 'PUT' : 'POST',
+    headers: {'Content-Type':'application/json'},
+    body:    JSON.stringify(body)
+  });
+
+  if(res.ok){
+    closeModal();
+    showMsg('User saved successfully', 'ok');
+    loadUsers();
+  } else {
+    const d = await res.json();
+    showMsg(d.error || 'Error saving user', 'err');
+  }
 }
 
 async function deleteUser(id){
-  if(!confirm('Delete this user?')) return;
-  const res = await fetch(`/users/${id}`,{method:'DELETE'});
-  if(res.ok){ showMsg('Deleted','ok'); loadUsers(); }
-  else{ const d=await res.json(); showMsg(d.error||'Error','err'); }
+  if(!confirm('Delete this user? This cannot be undone.')) return;
+  const res = await fetch(`/users/${id}`, {method:'DELETE'});
+  if(res.ok){ showMsg('User deleted', 'ok'); loadUsers(); }
+  else { const d = await res.json(); showMsg(d.error||'Error deleting','err'); }
 }
 
-function showMsg(msg,type){
-  const el=document.getElementById('msg');
-  el.textContent=msg; el.className=`msg msg-${type}`; el.style.display='block';
-  setTimeout(()=>el.style.display='none',2500);
+function showMsg(msg, type){
+  const el = document.getElementById('msg');
+  el.textContent   = msg;
+  el.className     = `msg msg-${type}`;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
 }
 </script>
 </body>

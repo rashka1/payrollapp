@@ -33,6 +33,7 @@
   .field{margin-bottom:10px}
   .field label{font-size:12px;font-weight:600;display:block;margin-bottom:3px}
   .field select,.field input{width:100%;padding:8px 11px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
+  .field input:focus,.field select:focus{outline:none;border-color:#1A56A0}
   .modal-btns{display:flex;gap:8px;margin-top:1rem}
   .msg{padding:8px 12px;border-radius:7px;font-size:13px;margin-bottom:8px;display:none}
   .msg-ok{background:#F0FDF4;border:1px solid #86EFAC;color:#16A34A}
@@ -76,9 +77,9 @@
 <div class="modal" id="genModal">
   <div class="modal-box">
     <h2>Generate Payroll</h2>
-    <p>Generate payroll for one employee.</p>
-    <div class="field"><label>Employee (Active only)</label><select id="gEmployee"></select></div>
-    <div class="field"><label>Month</label>
+    <p>Generate payroll for one active employee.</p>
+    <div class="field"><label>Employee *</label><select id="gEmployee"></select></div>
+    <div class="field"><label>Month *</label>
       <select id="gMonth">
         <option value="1">January</option><option value="2">February</option>
         <option value="3">March</option><option value="4">April</option>
@@ -88,7 +89,9 @@
         <option value="11">November</option><option value="12">December</option>
       </select>
     </div>
-    <div class="field"><label>Year</label><input id="gYear" type="number" value="2026" /></div>
+    <div class="field"><label>Year *</label>
+      <input id="gYear" type="number" value="2026" min="2000" max="2100" />
+    </div>
     <div class="modal-btns">
       <button class="btn btn-blue" onclick="generatePayroll()" style="flex:1">Generate</button>
       <button class="btn" style="background:#E2E8F0;flex:1" onclick="closeGenModal()">Cancel</button>
@@ -100,8 +103,8 @@
 <div class="modal" id="bulkModal">
   <div class="modal-box">
     <h2>⚡ Bulk Generate Payroll</h2>
-    <p>Generates payroll for ALL active employees for the selected month. Already existing records are skipped automatically.</p>
-    <div class="field"><label>Month</label>
+    <p>Generates payroll for ALL active employees. Already existing records are skipped automatically.</p>
+    <div class="field"><label>Month *</label>
       <select id="bMonth">
         <option value="1">January</option><option value="2">February</option>
         <option value="3">March</option><option value="4">April</option>
@@ -111,7 +114,9 @@
         <option value="11">November</option><option value="12">December</option>
       </select>
     </div>
-    <div class="field"><label>Year</label><input id="bYear" type="number" value="2026" /></div>
+    <div class="field"><label>Year *</label>
+      <input id="bYear" type="number" value="2026" min="2000" max="2100" />
+    </div>
     <div class="modal-btns">
       <button class="btn btn-purple" onclick="bulkGenerate()" style="flex:1">Generate All</button>
       <button class="btn" style="background:#E2E8F0;flex:1" onclick="closeBulkModal()">Cancel</button>
@@ -154,9 +159,9 @@ async function loadPayroll(){
 async function loadActiveEmployees(){
   const res = await fetch('/api/employees?status=active');
   const emps = await res.json();
-  document.getElementById('gEmployee').innerHTML = emps.map(e =>
-    `<option value="${e.id}">${e.name} — $${e.base_salary} + $${e.bonus} bonus</option>`
-  ).join('');
+  document.getElementById('gEmployee').innerHTML = emps.length
+    ? emps.map(e => `<option value="${e.id}">${e.name} — $${e.base_salary} + $${e.bonus} bonus</option>`).join('')
+    : '<option value="">No active employees</option>';
 }
 
 function openGenModal(){ document.getElementById('genModal').classList.add('show'); }
@@ -165,46 +170,72 @@ function openBulkModal(){ document.getElementById('bulkModal').classList.add('sh
 function closeBulkModal(){ document.getElementById('bulkModal').classList.remove('show'); }
 
 async function generatePayroll(){
-  const body = {
-    employee_id: document.getElementById('gEmployee').value,
-    month: document.getElementById('gMonth').value,
-    year:  document.getElementById('gYear').value
-  };
-  const res = await fetch('/api/payroll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const employee_id = document.getElementById('gEmployee').value;
+  const month       = document.getElementById('gMonth').value;
+  const year        = document.getElementById('gYear').value;
+
+  if(!employee_id){
+    showMsg('Please select an employee','err'); return;
+  }
+  if(!year){
+    showMsg('Year is required','err'); return;
+  }
+  if(parseInt(year) < 2000 || parseInt(year) > 2100){
+    showMsg('Year must be between 2000 and 2100','err'); return;
+  }
+
+  const res = await fetch('/api/payroll', {
+    method:  'POST',
+    headers: {'Content-Type':'application/json'},
+    body:    JSON.stringify({ employee_id, month, year })
+  });
   const data = await res.json();
-  if(res.ok){ closeGenModal(); showMsg('Payroll generated','ok'); loadPayroll(); }
-  else showMsg(data.error||'Error','err');
+  if(res.ok){ closeGenModal(); showMsg('Payroll generated successfully','ok'); loadPayroll(); }
+  else showMsg(data.error||'Error generating payroll','err');
 }
 
 async function bulkGenerate(){
-  const body = {
-    month: document.getElementById('bMonth').value,
-    year:  document.getElementById('bYear').value
-  };
-  const res = await fetch('/api/payroll/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const month = document.getElementById('bMonth').value;
+  const year  = document.getElementById('bYear').value;
+
+  if(!year){
+    showMsg('Year is required','err'); return;
+  }
+  if(parseInt(year) < 2000 || parseInt(year) > 2100){
+    showMsg('Year must be between 2000 and 2100','err'); return;
+  }
+
+  const res = await fetch('/api/payroll/bulk', {
+    method:  'POST',
+    headers: {'Content-Type':'application/json'},
+    body:    JSON.stringify({ month, year })
+  });
   const data = await res.json();
   if(res.ok){ closeBulkModal(); showMsg(data.message,'ok'); loadPayroll(); }
   else showMsg(data.error||'Error','err');
 }
 
 async function approvePayroll(id){
-  if(!confirm('Approve this payroll? Cannot be undone.')) return;
-  const res = await fetch(`/api/payroll/${id}/approve`,{method:'PUT'});
+  if(!confirm('Approve this payroll? This cannot be undone.')) return;
+  const res = await fetch(`/api/payroll/${id}/approve`, {method:'PUT'});
   const data = await res.json();
-  if(res.ok){ showMsg('Approved','ok'); loadPayroll(); }
+  if(res.ok){ showMsg('Payroll approved','ok'); loadPayroll(); }
   else showMsg(data.error,'err');
 }
 
 async function deletePayroll(id){
   if(!confirm('Delete this payroll record?')) return;
-  const res = await fetch(`/api/payroll/${id}`,{method:'DELETE'});
+  const res = await fetch(`/api/payroll/${id}`, {method:'DELETE'});
   if(res.ok){ showMsg('Deleted','ok'); loadPayroll(); }
+  else { const d=await res.json(); showMsg(d.error||'Error','err'); }
 }
 
 function showMsg(msg,type){
-  const el=document.getElementById('msg');
-  el.textContent=msg; el.className=`msg msg-${type}`; el.style.display='block';
-  setTimeout(()=>el.style.display='none',2500);
+  const el = document.getElementById('msg');
+  el.textContent   = msg;
+  el.className     = `msg msg-${type}`;
+  el.style.display = 'block';
+  setTimeout(()=>el.style.display='none', 2500);
 }
 </script>
 </body>
