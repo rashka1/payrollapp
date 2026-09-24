@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Users — Payroll System</title>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:sans-serif;background:#F8F9FA}
+  .topbar{background:#0F2044;color:#fff;padding:10px 1rem;display:flex;justify-content:space-between;align-items:center}
+  .topbar h1{font-size:16px;font-weight:700}
+  .nav-links{display:flex;gap:8px;align-items:center}
+  .nav-links a{color:#fff;text-decoration:none;font-size:13px;padding:5px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px}
+  .main{max-width:800px;margin:1rem auto;padding:0 1rem}
+  .toolbar{display:flex;gap:8px;margin-bottom:1rem}
+  .btn{padding:8px 14px;border:none;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer}
+  .btn-blue{background:#1A56A0;color:#fff}
+  .btn-yellow{background:#D97706;color:#fff;padding:4px 10px;font-size:12px}
+  .btn-red{background:#DC2626;color:#fff;padding:4px 10px;font-size:12px}
+  .card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:1rem}
+  table{width:100%!important}
+  .badge{font-size:11px;padding:2px 8px;border-radius:9px;font-weight:600}
+  .badge-admin{background:#F5F3FF;color:#7C3AED;border:1px solid #C4B5FD}
+  .badge-user{background:#EFF6FF;color:#1A56A0;border:1px solid #93C5FD}
+  .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center}
+  .modal.show{display:flex}
+  .modal-box{background:#fff;border-radius:12px;padding:1.5rem;width:100%;max-width:400px}
+  .modal-box h2{font-size:17px;font-weight:700;color:#0F2044;margin-bottom:1rem}
+  .field{margin-bottom:10px}
+  .field label{font-size:12px;font-weight:600;display:block;margin-bottom:3px}
+  .field input,.field select{width:100%;padding:8px 11px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
+  .modal-btns{display:flex;gap:8px;margin-top:1rem}
+  .msg{padding:8px 12px;border-radius:7px;font-size:13px;margin-bottom:8px;display:none}
+  .msg-ok{background:#F0FDF4;border:1px solid #86EFAC;color:#16A34A}
+  .msg-err{background:#FEF2F2;border:1px solid #FCA5A5;color:#DC2626}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div><h1>Payroll System</h1><span style="font-size:13px;opacity:.7">User Management</span></div>
+  <div class="nav-links">
+    <span style="font-size:13px">{{ user.username }} ({{ user.role }})</span>
+    <a href="/employees">Employees</a>
+    <a href="/payroll">Payroll</a>
+    <a href="/logout">Logout</a>
+  </div>
+</div>
+
+<div class="main">
+  <div id="msg" class="msg"></div>
+  <div class="toolbar">
+    <button class="btn btn-blue" onclick="openModal()">+ Add User</button>
+  </div>
+  <div class="card">
+    <table id="userTable">
+      <thead><tr>
+        <th>Username</th><th>Email</th><th>Role</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="userBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <h2 id="modalTitle">Add User</h2>
+    <input type="hidden" id="userId" />
+    <div class="field"><label>Username</label><input id="fUsername" /></div>
+    <div class="field"><label>Email</label><input id="fEmail" /></div>
+    <div class="field" id="pwdField"><label>Password</label><input id="fPassword" type="password" placeholder="Leave blank to keep current" /></div>
+    <div class="field"><label>Role</label>
+      <select id="fRole"><option value="user">User</option><option value="admin">Admin</option></select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-blue" onclick="saveUser()" style="flex:1">Save</button>
+      <button class="btn" style="background:#E2E8F0;flex:1" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script>
+let userTable;
+let usersData = [];
+window.onload = loadUsers;
+
+async function loadUsers(){
+  const res = await fetch('/users');
+  usersData = await res.json();
+  if(userTable) userTable.destroy();
+  document.getElementById('userBody').innerHTML = usersData.map(u => `
+    <tr>
+      <td><b>${u.username}</b></td>
+      <td>${u.email}</td>
+      <td><span class="badge badge-${u.role}">${u.role}</span></td>
+      <td>
+        <button class="btn btn-yellow" onclick="editUser(${u.id})">Edit</button>
+        <button class="btn btn-red" onclick="deleteUser(${u.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+  userTable = $('#userTable').DataTable({ pageLength:10, columnDefs:[{orderable:false,targets:3}] });
+}
+
+function openModal(data=null){
+  document.getElementById('modal').classList.add('show');
+  document.getElementById('modalTitle').textContent = data ? 'Edit User' : 'Add User';
+  document.getElementById('userId').value = data?.id || '';
+  document.getElementById('fUsername').value = data?.username || '';
+  document.getElementById('fEmail').value = data?.email || '';
+  document.getElementById('fPassword').value = '';
+  document.getElementById('fRole').value = data?.role || 'user';
+}
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+
+function editUser(id){
+  const user = usersData.find(u => u.id === id);
+  if(user) openModal(user);
+}
+
+async function saveUser(){
+  const id = document.getElementById('userId').value;
+  const body = {
+    username: document.getElementById('fUsername').value,
+    email: document.getElementById('fEmail').value,
+    role: document.getElementById('fRole').value
+  };
+  const pwd = document.getElementById('fPassword').value;
+  if(pwd) body.password = pwd;
+  if(!id && !pwd){ showMsg('Password is required for new users','err'); return; }
+
+  const url = id ? `/users/${id}` : '/users';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(res.ok){ closeModal(); showMsg('Saved','ok'); loadUsers(); }
+  else{ const d=await res.json(); showMsg(d.error||'Error','err'); }
+}
+
+async function deleteUser(id){
+  if(!confirm('Delete this user?')) return;
+  const res = await fetch(`/users/${id}`,{method:'DELETE'});
+  if(res.ok){ showMsg('Deleted','ok'); loadUsers(); }
+  else{ const d=await res.json(); showMsg(d.error||'Error','err'); }
+}
+
+function showMsg(msg,type){
+  const el=document.getElementById('msg');
+  el.textContent=msg; el.className=`msg msg-${type}`; el.style.display='block';
+  setTimeout(()=>el.style.display='none',2500);
+}
+</script>
+</body>
+</html>

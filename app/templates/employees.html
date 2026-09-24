@@ -10,21 +10,17 @@
   body{font-family:sans-serif;background:#F8F9FA;color:#1A1A1A}
   .topbar{background:#0F2044;color:#fff;padding:10px 1rem;display:flex;justify-content:space-between;align-items:center}
   .topbar h1{font-size:16px;font-weight:700}
-  .topbar span{font-size:13px;opacity:.7}
-  .logout{color:#fff;text-decoration:none;font-size:13px;padding:5px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px}
-  .main{max-width:900px;margin:1rem auto;padding:0 1rem}
-  .toolbar{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap}
-  input{padding:8px 12px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px;flex:1;min-width:200px}
+  .nav-links{display:flex;gap:8px;align-items:center}
+  .nav-links a{color:#fff;text-decoration:none;font-size:13px;padding:5px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px}
+  .main{max-width:960px;margin:1rem auto;padding:0 1rem}
+  .toolbar{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center}
   select{padding:8px 12px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
   .btn{padding:8px 14px;border:none;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer}
   .btn-blue{background:#1A56A0;color:#fff}
-  .btn-green{background:#16A34A;color:#fff;padding:4px 10px;font-size:12px}
   .btn-yellow{background:#D97706;color:#fff;padding:4px 10px;font-size:12px}
   .btn-red{background:#DC2626;color:#fff;padding:4px 10px;font-size:12px}
   .card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:1rem}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th{background:#0F2044;color:#fff;padding:9px 10px;text-align:left;font-size:12px}
-  td{padding:9px 10px;border-bottom:1px solid #E2E8F0;vertical-align:middle}
+  table{width:100%!important}
   .badge{font-size:11px;padding:2px 8px;border-radius:9px;font-weight:600}
   .badge-active{background:#F0FDF4;color:#16A34A;border:1px solid #86EFAC}
   .badge-inactive{background:#FEF2F2;color:#DC2626;border:1px solid #FCA5A5}
@@ -43,18 +39,18 @@
 </head>
 <body>
 <div class="topbar">
-  <div><h1>Payroll System</h1><span>Employee Management</span></div>
-  <div style="display:flex;gap:10px;align-items:center">
-    <span>{{ user.username }} ({{ user.role }})</span>
-    <a href="/payroll" style="color:#fff;text-decoration:none;font-size:13px;padding:5px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px">Payroll</a>
-    <a href="/logout" class="logout">Logout</a>
+  <div><h1>Payroll System</h1><span style="font-size:13px;opacity:.7">Employees</span></div>
+  <div class="nav-links">
+    <span style="font-size:13px">{{ user.username }} ({{ user.role }})</span>
+    <a href="/payroll">Payroll</a>
+    {% if user.role == 'admin' %}<a href="/users-page">Users</a>{% endif %}
+    <a href="/logout">Logout</a>
   </div>
 </div>
 
 <div class="main">
   <div id="msg" class="msg"></div>
   <div class="toolbar">
-    <input type="text" id="search" placeholder="Search employees..." oninput="loadEmployees()" />
     <select id="statusFilter" onchange="loadEmployees()">
       <option value="">All Status</option>
       <option value="active">Active</option>
@@ -73,16 +69,15 @@
   </div>
 </div>
 
-<!-- ADD/EDIT MODAL -->
 <div class="modal" id="modal">
   <div class="modal-box">
     <h2 id="modalTitle">Add Employee</h2>
     <input type="hidden" id="empId" />
-    <div class="field"><label>Full Name</label><input id="fName" placeholder="Full name" /></div>
-    <div class="field"><label>Email</label><input id="fEmail" placeholder="Email" /></div>
-    <div class="field"><label>Position</label><input id="fPosition" placeholder="Position" /></div>
-    <div class="field"><label>Base Salary</label><input id="fSalary" type="number" placeholder="0.00" /></div>
-    <div class="field"><label>Bonus</label><input id="fBonus" type="number" placeholder="0.00" value="0" /></div>
+    <div class="field"><label>Full Name</label><input id="fName" /></div>
+    <div class="field"><label>Email</label><input id="fEmail" /></div>
+    <div class="field"><label>Position</label><input id="fPosition" /></div>
+    <div class="field"><label>Base Salary</label><input id="fSalary" type="number" /></div>
+    <div class="field"><label>Bonus</label><input id="fBonus" type="number" value="0" /></div>
     <div class="field"><label>Status</label>
       <select id="fStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select>
     </div>
@@ -96,16 +91,15 @@
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script>
+let empTable;
 window.onload = loadEmployees;
 
 async function loadEmployees() {
-  const search = document.getElementById('search').value;
   const status = document.getElementById('statusFilter').value;
-  const res = await fetch(`/api/employees?search=${search}&status=${status}`);
+  const res = await fetch(`/api/employees?status=${status}`);
   const emps = await res.json();
-  const tbody = document.getElementById('empBody');
-  if (!emps.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94A3B8;padding:1rem">No employees found</td></tr>'; return; }
-  tbody.innerHTML = emps.map(e => `
+  if (empTable) { empTable.destroy(); }
+  document.getElementById('empBody').innerHTML = emps.map(e => `
     <tr>
       <td><b>${e.name}</b></td>
       <td>${e.email}</td>
@@ -119,29 +113,28 @@ async function loadEmployees() {
       </td>
     </tr>
   `).join('');
+  empTable = $('#empTable').DataTable({ pageLength:10, columnDefs:[{orderable:false,targets:6}] });
 }
 
 function openModal(data=null) {
   document.getElementById('modal').classList.add('show');
   document.getElementById('modalTitle').textContent = data ? 'Edit Employee' : 'Add Employee';
-  document.getElementById('empId').value = data ? data.id : '';
-  document.getElementById('fName').value = data ? data.name : '';
-  document.getElementById('fEmail').value = data ? data.email : '';
-  document.getElementById('fPosition').value = data ? data.position : '';
-  document.getElementById('fSalary').value = data ? data.base_salary : '';
-  document.getElementById('fBonus').value = data ? data.bonus : 0;
-  document.getElementById('fStatus').value = data ? data.status : 'active';
+  document.getElementById('empId').value = data?.id || '';
+  document.getElementById('fName').value = data?.name || '';
+  document.getElementById('fEmail').value = data?.email || '';
+  document.getElementById('fPosition').value = data?.position || '';
+  document.getElementById('fSalary').value = data?.base_salary || '';
+  document.getElementById('fBonus').value = data?.bonus ?? 0;
+  document.getElementById('fStatus').value = data?.status || 'active';
 }
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
 
-function closeModal() { document.getElementById('modal').classList.remove('show'); }
-
-async function editEmployee(id) {
+async function editEmployee(id){
   const res = await fetch(`/api/employees/${id}`);
-  const data = await res.json();
-  openModal(data);
+  openModal(await res.json());
 }
 
-async function saveEmployee() {
+async function saveEmployee(){
   const id = document.getElementById('empId').value;
   const body = {
     name:        document.getElementById('fName').value,
@@ -151,26 +144,26 @@ async function saveEmployee() {
     bonus:       document.getElementById('fBonus').value,
     status:      document.getElementById('fStatus').value
   };
-  const method = id ? 'PUT' : 'POST';
-  const url    = id ? `/api/employees/${id}` : '/api/employees';
-  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  if (res.ok) { closeModal(); showMsg('Saved successfully', 'ok'); loadEmployees(); }
-  else { const d=await res.json(); showMsg(d.error||'Error saving', 'err'); }
+  const res = await fetch(id ? `/api/employees/${id}` : '/api/employees', {
+    method: id ? 'PUT' : 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if(res.ok){ closeModal(); showMsg('Saved successfully','ok'); loadEmployees(); }
+  else { const d=await res.json(); showMsg(d.error||'Error saving','err'); }
 }
 
-async function deleteEmployee(id) {
-  if (!confirm('Delete this employee and all their payroll records?')) return;
-  await fetch(`/api/employees/${id}`, {method:'DELETE'});
-  showMsg('Employee deleted', 'ok');
-  loadEmployees();
+async function deleteEmployee(id){
+  if(!confirm('Delete employee and all their payroll records?')) return;
+  const res = await fetch(`/api/employees/${id}`, {method:'DELETE'});
+  if(res.ok){ showMsg('Employee deleted','ok'); loadEmployees(); }
+  else { const d=await res.json(); showMsg(d.error||'Error','err'); }
 }
 
-function showMsg(msg, type) {
-  const el = document.getElementById('msg');
-  el.textContent = msg;
-  el.className = `msg msg-${type}`;
-  el.style.display = 'block';
-  setTimeout(() => el.style.display = 'none', 2500);
+function showMsg(msg,type){
+  const el=document.getElementById('msg');
+  el.textContent=msg; el.className=`msg msg-${type}`; el.style.display='block';
+  setTimeout(()=>el.style.display='none',2500);
 }
 </script>
 </body>

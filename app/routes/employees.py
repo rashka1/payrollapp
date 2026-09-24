@@ -10,33 +10,30 @@ employees_bp = Blueprint('employees', __name__)
 @employees_bp.route('/employees')
 @login_required
 def list_employees():
-    return render_template('employees.html',
-                           user=current_user.to_dict())
+    return render_template('employees.html', user=current_user.to_dict())
 
-# GET all employees (with optional search)
+# GET all employees — all logged in users
 @employees_bp.route('/api/employees', methods=['GET'])
 @login_required
 def get_employees():
     search = request.args.get('search', '')
     status = request.args.get('status', '')
-
     query = Employee.query
     if search:
         query = query.filter(Employee.name.ilike(f'%{search}%'))
     if status:
         query = query.filter_by(status=status)
-
     employees = query.order_by(Employee.name).all()
     return jsonify([e.to_dict() for e in employees])
 
-# GET one employee
+# GET one employee — all logged in users
 @employees_bp.route('/api/employees/<int:id>', methods=['GET'])
 @login_required
 def get_employee(id):
     emp = Employee.query.get_or_404(id)
     return jsonify(emp.to_dict())
 
-# POST create employee
+# POST create employee — all logged in users
 @employees_bp.route('/api/employees', methods=['POST'])
 @login_required
 def create_employee():
@@ -57,7 +54,7 @@ def create_employee():
         db.session.rollback()
         return jsonify({'error': 'Email already exists'}), 409
 
-# PUT update employee
+# PUT update employee — all logged in users
 @employees_bp.route('/api/employees/<int:id>', methods=['PUT'])
 @login_required
 def update_employee(id):
@@ -72,7 +69,7 @@ def update_employee(id):
     db.session.commit()
     return jsonify(emp.to_dict())
 
-# DELETE employee
+# DELETE employee — all logged in users
 @employees_bp.route('/api/employees/<int:id>', methods=['DELETE'])
 @login_required
 def delete_employee(id):

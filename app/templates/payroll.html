@@ -4,23 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Payroll — Payroll System</title>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:sans-serif;background:#F8F9FA}
   .topbar{background:#0F2044;color:#fff;padding:10px 1rem;display:flex;justify-content:space-between;align-items:center}
   .topbar h1{font-size:16px;font-weight:700}
-  .logout{color:#fff;text-decoration:none;font-size:13px;padding:5px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px}
-  .main{max-width:950px;margin:1rem auto;padding:0 1rem}
+  .nav-links{display:flex;gap:8px;align-items:center}
+  .nav-links a{color:#fff;text-decoration:none;font-size:13px;padding:5px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px}
+  .main{max-width:1000px;margin:1rem auto;padding:0 1rem}
   .toolbar{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap}
-  input,select{padding:8px 12px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
+  select{padding:8px 12px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
   .btn{padding:8px 14px;border:none;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer}
   .btn-blue{background:#1A56A0;color:#fff}
   .btn-green{background:#16A34A;color:#fff;padding:4px 10px;font-size:12px}
   .btn-red{background:#DC2626;color:#fff;padding:4px 10px;font-size:12px}
   .card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:1rem}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th{background:#0F2044;color:#fff;padding:9px 10px;text-align:left;font-size:12px}
-  td{padding:9px 10px;border-bottom:1px solid #E2E8F0;vertical-align:middle}
+  table{width:100%!important}
   .badge{font-size:11px;padding:2px 8px;border-radius:9px;font-weight:600}
   .badge-pending{background:#FFF7ED;color:#D97706;border:1px solid #FED7AA}
   .badge-approved{background:#F0FDF4;color:#16A34A;border:1px solid #86EFAC}
@@ -29,7 +29,7 @@
   .modal-box{background:#fff;border-radius:12px;padding:1.5rem;width:100%;max-width:400px}
   .modal-box h2{font-size:17px;font-weight:700;color:#0F2044;margin-bottom:1rem}
   .field{margin-bottom:10px}
-  .field label{font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:3px}
+  .field label{font-size:12px;font-weight:600;display:block;margin-bottom:3px}
   .field select,.field input{width:100%;padding:8px 11px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
   .modal-btns{display:flex;gap:8px;margin-top:1rem}
   .msg{padding:8px 12px;border-radius:7px;font-size:13px;margin-bottom:8px;display:none}
@@ -39,18 +39,18 @@
 </head>
 <body>
 <div class="topbar">
-  <div><h1>Payroll System</h1><span>Payroll Management</span></div>
-  <div style="display:flex;gap:10px;align-items:center">
-    <span>{{ user.username }} ({{ user.role }})</span>
-    <a href="/employees" style="color:#fff;text-decoration:none;font-size:13px;padding:5px 12px;border:1px solid rgba(255,255,255,.3);border-radius:6px">Employees</a>
-    <a href="/logout" class="logout">Logout</a>
+  <div><h1>Payroll System</h1><span style="font-size:13px;opacity:.7">Payroll</span></div>
+  <div class="nav-links">
+    <span style="font-size:13px">{{ user.username }} ({{ user.role }})</span>
+    <a href="/employees">Employees</a>
+    {% if user.role == 'admin' %}<a href="/users-page">Users</a>{% endif %}
+    <a href="/logout">Logout</a>
   </div>
 </div>
 
 <div class="main">
   <div id="msg" class="msg"></div>
   <div class="toolbar">
-    <input type="text" id="search" placeholder="Search by employee name..." oninput="loadPayroll()" />
     <select id="statusFilter" onchange="loadPayroll()">
       <option value="">All Status</option>
       <option value="pending">Pending</option>
@@ -59,21 +59,20 @@
     <button class="btn btn-blue" onclick="openGenModal()">+ Generate Payroll</button>
   </div>
   <div class="card">
-    <table>
+    <table id="payTable">
       <thead><tr>
         <th>Employee</th><th>Month/Year</th><th>Base Salary</th>
         <th>Bonus</th><th>Total</th><th>Status</th><th>Actions</th>
       </tr></thead>
-      <tbody id="payrollBody"></tbody>
+      <tbody id="payBody"></tbody>
     </table>
   </div>
 </div>
 
-<!-- GENERATE MODAL -->
 <div class="modal" id="genModal">
   <div class="modal-box">
     <h2>Generate Payroll</h2>
-    <div class="field"><label>Employee</label><select id="gEmployee"></select></div>
+    <div class="field"><label>Employee (Active only)</label><select id="gEmployee"></select></div>
     <div class="field"><label>Month</label>
       <select id="gMonth">
         <option value="1">January</option><option value="2">February</option>
@@ -92,78 +91,79 @@
   </div>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script>
 const USER_ROLE = '{{ user.role }}';
+const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let payTable;
 
 window.onload = () => { loadPayroll(); loadActiveEmployees(); };
 
-async function loadPayroll() {
-  const search = document.getElementById('search').value;
+async function loadPayroll(){
   const status = document.getElementById('statusFilter').value;
-  const res    = await fetch(`/api/payroll?search=${search}&status=${status}`);
-  const data   = await res.json();
-  const tbody  = document.getElementById('payrollBody');
-  const months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  if (!data.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94A3B8;padding:1rem">No payroll records</td></tr>'; return; }
-  tbody.innerHTML = data.map(p => `
+  const res = await fetch(`/api/payroll?status=${status}`);
+  const data = await res.json();
+  if(payTable) payTable.destroy();
+  document.getElementById('payBody').innerHTML = data.map(p => `
     <tr>
       <td><b>${p.employee}</b></td>
-      <td>${months[p.month]} ${p.year}</td>
+      <td>${MONTHS[p.month]} ${p.year}</td>
       <td>$${p.base_salary.toFixed(2)}</td>
       <td>$${p.bonus.toFixed(2)}</td>
       <td><b>$${p.total_salary.toFixed(2)}</b></td>
       <td><span class="badge badge-${p.status}">${p.status}</span></td>
       <td>
-        ${p.status === 'pending' && USER_ROLE === 'admin' ? `<button class="btn btn-green" onclick="approvePayroll(${p.id})">Approve</button>` : ''}
-        ${p.status === 'pending' ? `<button class="btn btn-red" onclick="deletePayroll(${p.id})">Delete</button>` : ''}
-        ${p.status === 'approved' ? '<span style="color:#94A3B8;font-size:12px">Locked</span>' : ''}
+        ${p.status==='pending' && USER_ROLE==='admin' ? `<button class="btn btn-green" onclick="approvePayroll(${p.id})">Approve</button>` : ''}
+        ${p.status==='pending' ? `<button class="btn btn-red" onclick="deletePayroll(${p.id})">Delete</button>` : ''}
+        ${p.status==='approved' ? '<span style="color:#94A3B8;font-size:12px">Locked</span>' : ''}
       </td>
     </tr>
   `).join('');
+  payTable = $('#payTable').DataTable({ pageLength:10, columnDefs:[{orderable:false,targets:6}] });
 }
 
-async function loadActiveEmployees() {
-  const res  = await fetch('/api/employees?status=active');
+async function loadActiveEmployees(){
+  const res = await fetch('/api/employees?status=active');
   const emps = await res.json();
-  const sel  = document.getElementById('gEmployee');
-  sel.innerHTML = emps.map(e => `<option value="${e.id}">${e.name} ($${e.base_salary} + $${e.bonus} bonus)</option>`).join('');
+  document.getElementById('gEmployee').innerHTML = emps.map(e =>
+    `<option value="${e.id}">${e.name} — $${e.base_salary} + $${e.bonus} bonus</option>`
+  ).join('');
 }
 
-function openGenModal()  { document.getElementById('genModal').classList.add('show'); }
-function closeGenModal() { document.getElementById('genModal').classList.remove('show'); }
+function openGenModal(){ document.getElementById('genModal').classList.add('show'); }
+function closeGenModal(){ document.getElementById('genModal').classList.remove('show'); }
 
-async function generatePayroll() {
+async function generatePayroll(){
   const body = {
     employee_id: document.getElementById('gEmployee').value,
-    month:       document.getElementById('gMonth').value,
-    year:        document.getElementById('gYear').value
+    month: document.getElementById('gMonth').value,
+    year: document.getElementById('gYear').value
   };
-  const res = await fetch('/api/payroll', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const res = await fetch('/api/payroll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data = await res.json();
-  if (res.ok) { closeGenModal(); showMsg('Payroll generated successfully', 'ok'); loadPayroll(); }
-  else showMsg(data.error || 'Error generating payroll', 'err');
+  if(res.ok){ closeGenModal(); showMsg('Payroll generated','ok'); loadPayroll(); }
+  else showMsg(data.error||'Error','err');
 }
 
-async function approvePayroll(id) {
-  if (!confirm('Approve this payroll? This cannot be undone.')) return;
-  const res = await fetch(`/api/payroll/${id}/approve`, {method:'PUT'});
+async function approvePayroll(id){
+  if(!confirm('Approve this payroll? Cannot be undone.')) return;
+  const res = await fetch(`/api/payroll/${id}/approve`,{method:'PUT'});
   const data = await res.json();
-  if (res.ok) { showMsg('Payroll approved', 'ok'); loadPayroll(); }
-  else showMsg(data.error, 'err');
+  if(res.ok){ showMsg('Approved','ok'); loadPayroll(); }
+  else showMsg(data.error,'err');
 }
 
-async function deletePayroll(id) {
-  if (!confirm('Delete this payroll record?')) return;
-  const res = await fetch(`/api/payroll/${id}`, {method:'DELETE'});
-  if (res.ok) { showMsg('Deleted', 'ok'); loadPayroll(); }
+async function deletePayroll(id){
+  if(!confirm('Delete this payroll record?')) return;
+  const res = await fetch(`/api/payroll/${id}`,{method:'DELETE'});
+  if(res.ok){ showMsg('Deleted','ok'); loadPayroll(); }
 }
 
-function showMsg(msg, type) {
-  const el = document.getElementById('msg');
-  el.textContent = msg;
-  el.className = `msg msg-${type}`;
-  el.style.display = 'block';
-  setTimeout(() => el.style.display = 'none', 2500);
+function showMsg(msg,type){
+  const el=document.getElementById('msg');
+  el.textContent=msg; el.className=`msg msg-${type}`; el.style.display='block';
+  setTimeout(()=>el.style.display='none',2500);
 }
 </script>
 </body>
