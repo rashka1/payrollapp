@@ -44,6 +44,8 @@
   <div><h1>Payroll System</h1><span style="font-size:13px;opacity:.7">Employees</span></div>
   <div class="nav-links">
     <span style="font-size:13px">{{ user.username }} ({{ user.role }})</span>
+    <a href="/welcome">Welcome</a>
+    <span style="font-size:13px">{{ user.username }} ({{ user.role }})</span>
     <a href="/payroll">Payroll</a>
     {% if user.role == 'admin' %}<a href="/users-page">Users</a>{% endif %}
     <a href="/logout">Logout</a>

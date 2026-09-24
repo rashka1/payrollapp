@@ -9,7 +9,8 @@ payroll_bp = Blueprint('payroll', __name__)
 @payroll_bp.route('/payroll')
 @login_required
 def payroll_page():
-    return render_template('payroll.html', user=current_user.to_dict())
+    return render_template('welcome.html', user=current_user.to_dict())
+
 
 @payroll_bp.route('/api/payroll', methods=['GET'])
 @login_required
