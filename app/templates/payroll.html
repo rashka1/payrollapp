@@ -17,6 +17,7 @@
   select{padding:8px 12px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
   .btn{padding:8px 14px;border:none;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer}
   .btn-blue{background:#1A56A0;color:#fff}
+  .btn-purple{background:#7C3AED;color:#fff}
   .btn-green{background:#16A34A;color:#fff;padding:4px 10px;font-size:12px}
   .btn-red{background:#DC2626;color:#fff;padding:4px 10px;font-size:12px}
   .card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:1rem}
@@ -26,8 +27,9 @@
   .badge-approved{background:#F0FDF4;color:#16A34A;border:1px solid #86EFAC}
   .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center}
   .modal.show{display:flex}
-  .modal-box{background:#fff;border-radius:12px;padding:1.5rem;width:100%;max-width:400px}
-  .modal-box h2{font-size:17px;font-weight:700;color:#0F2044;margin-bottom:1rem}
+  .modal-box{background:#fff;border-radius:12px;padding:1.5rem;width:100%;max-width:420px}
+  .modal-box h2{font-size:17px;font-weight:700;color:#0F2044;margin-bottom:.5rem}
+  .modal-box p{font-size:13px;color:#64748B;margin-bottom:1rem}
   .field{margin-bottom:10px}
   .field label{font-size:12px;font-weight:600;display:block;margin-bottom:3px}
   .field select,.field input{width:100%;padding:8px 11px;border:1px solid #E2E8F0;border-radius:7px;font-size:13px}
@@ -39,7 +41,7 @@
 </head>
 <body>
 <div class="topbar">
-  <div><h1>Payroll System</h1><span style="font-size:13px;opacity:.7">Payroll</span></div>
+  <div><h1>Payroll System</h1><span style="font-size:13px;opacity:.7">Payroll Management</span></div>
   <div class="nav-links">
     <span style="font-size:13px">{{ user.username }} ({{ user.role }})</span>
     <a href="/employees">Employees</a>
@@ -57,6 +59,7 @@
       <option value="approved">Approved</option>
     </select>
     <button class="btn btn-blue" onclick="openGenModal()">+ Generate Payroll</button>
+    <button class="btn btn-purple" onclick="openBulkModal()">⚡ Bulk Generate</button>
   </div>
   <div class="card">
     <table id="payTable">
@@ -69,9 +72,11 @@
   </div>
 </div>
 
+<!-- SINGLE GENERATE MODAL -->
 <div class="modal" id="genModal">
   <div class="modal-box">
     <h2>Generate Payroll</h2>
+    <p>Generate payroll for one employee.</p>
     <div class="field"><label>Employee (Active only)</label><select id="gEmployee"></select></div>
     <div class="field"><label>Month</label>
       <select id="gMonth">
@@ -87,6 +92,29 @@
     <div class="modal-btns">
       <button class="btn btn-blue" onclick="generatePayroll()" style="flex:1">Generate</button>
       <button class="btn" style="background:#E2E8F0;flex:1" onclick="closeGenModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK GENERATE MODAL -->
+<div class="modal" id="bulkModal">
+  <div class="modal-box">
+    <h2>⚡ Bulk Generate Payroll</h2>
+    <p>Generates payroll for ALL active employees for the selected month. Already existing records are skipped automatically.</p>
+    <div class="field"><label>Month</label>
+      <select id="bMonth">
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+    </div>
+    <div class="field"><label>Year</label><input id="bYear" type="number" value="2026" /></div>
+    <div class="modal-btns">
+      <button class="btn btn-purple" onclick="bulkGenerate()" style="flex:1">Generate All</button>
+      <button class="btn" style="background:#E2E8F0;flex:1" onclick="closeBulkModal()">Cancel</button>
     </div>
   </div>
 </div>
@@ -133,16 +161,29 @@ async function loadActiveEmployees(){
 
 function openGenModal(){ document.getElementById('genModal').classList.add('show'); }
 function closeGenModal(){ document.getElementById('genModal').classList.remove('show'); }
+function openBulkModal(){ document.getElementById('bulkModal').classList.add('show'); }
+function closeBulkModal(){ document.getElementById('bulkModal').classList.remove('show'); }
 
 async function generatePayroll(){
   const body = {
     employee_id: document.getElementById('gEmployee').value,
     month: document.getElementById('gMonth').value,
-    year: document.getElementById('gYear').value
+    year:  document.getElementById('gYear').value
   };
   const res = await fetch('/api/payroll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data = await res.json();
   if(res.ok){ closeGenModal(); showMsg('Payroll generated','ok'); loadPayroll(); }
+  else showMsg(data.error||'Error','err');
+}
+
+async function bulkGenerate(){
+  const body = {
+    month: document.getElementById('bMonth').value,
+    year:  document.getElementById('bYear').value
+  };
+  const res = await fetch('/api/payroll/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data = await res.json();
+  if(res.ok){ closeBulkModal(); showMsg(data.message,'ok'); loadPayroll(); }
   else showMsg(data.error||'Error','err');
 }
 
